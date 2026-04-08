@@ -108,6 +108,16 @@ def apply_user_theme() -> None:
             color: #4f6070;
             margin-top: 0.8rem;
         }
+        .progress-pill {
+            display: inline-block;
+            padding: 0.4rem 0.75rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.86);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            color: #405162;
+            font-size: 0.9rem;
+            margin: 0 0.45rem 0.45rem 0;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -185,9 +195,22 @@ def render_chat(service: ExperimentService, code: str, state: Dict[str, object])
     with st.container(border=True):
         st.subheader("Experiment Chat")
         if state["unlimited_turns"]:
-            st.caption("There is no fixed turn limit for this session.")
+            st.caption("There is no fixed turn limit for this session. When you are done, use the button below to continue to the survey.")
         else:
-            st.caption(f"Messages used: {state['turn_count']} / {state['max_turns']}")
+            remaining_turns = max(int(state["max_turns"]) - int(state["turn_count"]), 0)
+            st.caption(
+                f"Messages used: {state['turn_count']} / {state['max_turns']}  •  Remaining before automatic survey: {remaining_turns}"
+            )
+
+        finish_col, spacer_col = st.columns([1, 3])
+        with finish_col:
+            if st.button("Finish chat and continue", type="secondary", use_container_width=True):
+                result = service.finish_chat(code)
+                if result["ok"]:
+                    st.session_state["user_state"] = result["data"]
+                    st.rerun()
+                st.error(result["message"])
+
         for message in state["messages"]:
             with st.chat_message("user"):
                 st.write(message["user_text"])
@@ -277,6 +300,25 @@ def render_completion_page() -> None:
     )
 
 
+def render_progress(state: Dict[str, object]) -> None:
+    if state["needs_survey"]:
+        current_step = "Final Survey"
+    elif state["consent_complete"]:
+        current_step = "Chat"
+    else:
+        current_step = "Consent"
+
+    pills = [
+        "1. Sign in",
+        f"2. {current_step}",
+        "3. Finish",
+    ]
+    st.markdown(
+        "".join(f'<span class="progress-pill">{pill}</span>' for pill in pills),
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="User", page_icon="🧪", layout="wide")
     apply_user_theme()
@@ -324,31 +366,48 @@ def main() -> None:
     state = latest_state["data"]
     st.session_state["user_state"] = state
 
-    if st.button("Leave this session"):
-        reset_user_flow()
-        st.rerun()
+    top_left, top_right = st.columns([4, 1])
+    with top_left:
+        render_progress(state)
+    with top_right:
+        if st.button("Leave session", use_container_width=True):
+            reset_user_flow()
+            st.rerun()
 
     if state["needs_survey"]:
         render_survey(service, code, state)
-    else:
-        consent_tab, chat_tab = st.tabs(["Consent", "Chat"])
-        with consent_tab:
-            render_consent(service, code, state)
-        with chat_tab:
-            if not state["consent_complete"]:
-                with st.container(border=True):
-                    st.subheader("Experiment Chat")
-                    st.info("Please complete the consent step first. The chat will unlock immediately after consent.")
-            else:
-                render_chat(service, code, state)
         st.markdown(
-            '<div class="soft-note">You can return to the Consent tab at any time during this session to review the privacy notice again.</div>',
+            '<div class="soft-note">You are in the final step. Once you submit the survey, this one-time code will be closed.</div>',
             unsafe_allow_html=True,
         )
-        if state["unlimited_turns"]:
-            st.info("This session has no fixed turn limit. You can continue the chat until you decide to stop the session.")
+    else:
+        if not state["consent_complete"]:
+            render_consent(service, code, state)
+            with st.container(border=True):
+                st.subheader("What happens next")
+                st.write("After you accept the consent form, the chat will open immediately. You will not need to return to the consent step again.")
         else:
-            st.info("The survey will appear automatically when you reach the maximum number of chat turns.")
+            render_chat(service, code, state)
+            with st.expander("Review the privacy notice again", expanded=False):
+                st.markdown(
+                    f"""
+                    <div class="consent-box">
+                        <strong>Consent version:</strong> {state['consent_version']}<br><br>
+                        {state['consent_text_snapshot']}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            if state["unlimited_turns"]:
+                st.markdown(
+                    '<div class="soft-note">This session does not have a fixed turn limit. When you feel the task is complete, select "Finish chat and continue".</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    '<div class="soft-note">You can continue chatting until the system opens the survey automatically, or you can finish the chat early whenever you are ready.</div>',
+                    unsafe_allow_html=True,
+                )
 
 
 if __name__ == "__main__":

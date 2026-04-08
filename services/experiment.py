@@ -193,6 +193,31 @@ class ExperimentService:
             return refreshed
         return {"ok": True, "reason": "consent_recorded", "data": refreshed["data"]}
 
+    def finish_chat(self, code: str) -> Dict[str, Any]:
+        state = self.enter_code(code)
+        if not state["ok"]:
+            return state
+        payload = state["data"]
+        if not payload["consent_complete"]:
+            return {
+                "ok": False,
+                "reason": "consent_required",
+                "message": "Consent is required before finishing the chat step.",
+            }
+        if payload["needs_survey"]:
+            return {"ok": True, "reason": "survey_ready", "data": payload}
+        if payload["code_status"] != "in_progress":
+            return {
+                "ok": False,
+                "reason": "session_closed",
+                "message": "This session is no longer active.",
+            }
+        self.database.update_session(payload["session_id"], status="survey_pending")
+        refreshed = self.enter_code(code)
+        if not refreshed["ok"]:
+            return refreshed
+        return {"ok": True, "reason": "chat_finished", "data": refreshed["data"]}
+
     def submit_survey(self, code: str, answers: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         state = self.enter_code(code)
         if not state["ok"]:

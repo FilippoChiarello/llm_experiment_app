@@ -53,3 +53,22 @@ def test_unlimited_turns_do_not_force_survey(experiment_service, temp_db) -> Non
         assert result["ok"] is True
         assert result["data"]["needs_survey"] is False
     assert started["data"]["session_id"] == temp_db.get_access_code(code)["session_id"]
+
+
+def test_finish_chat_allows_early_survey(experiment_service, temp_db) -> None:
+    code = temp_db.create_access_codes(1)[0]
+    experiment_service.enter_code(code)
+    experiment_service.record_consent(code)
+    experiment_service.submit_user_message(code, "Turn 1")
+    result = experiment_service.finish_chat(code)
+    assert result["ok"] is True
+    assert result["reason"] == "chat_finished"
+    assert result["data"]["needs_survey"] is True
+
+
+def test_finish_chat_requires_consent(experiment_service, temp_db) -> None:
+    code = temp_db.create_access_codes(1)[0]
+    experiment_service.enter_code(code)
+    result = experiment_service.finish_chat(code)
+    assert result["ok"] is False
+    assert result["reason"] == "consent_required"
