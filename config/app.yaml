@@ -1,0 +1,19 @@
+title: "LLM Experiment App"
+experiment_open: true
+max_turns: 3
+randomization_mode: balanced
+llm_mode: mock
+llm_provider: openai
+allow_resume: true
+privacy_version: "v1"
+privacy_notice_text: >
+  By continuing, you confirm that you have read this privacy notice and that you voluntarily
+  agree to participate in this research study. Your chat messages, questionnaire responses,
+  assigned experimental condition, and associated timestamps will be stored and processed for
+  research, analysis, and reporting purposes. The data collected through this app may be reviewed
+  by the research team and may be included in aggregated or anonymized outputs. Please do not enter
+  unnecessary personal data or any special-category sensitive information in the chat. You may stop
+  participating at any time before submission by leaving the session; however, information already
+  submitted during the study session may be retained for research integrity, logging, and compliance
+  purposes. By selecting the consent checkbox, you confirm that you understand these terms and agree
+  to the processing described here.

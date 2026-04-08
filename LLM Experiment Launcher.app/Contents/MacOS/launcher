@@ -1,0 +1,4 @@
+#!/bin/zsh
+PROJECT_ROOT="/Users/filippochiarello/Desktop/llm_experiment_app"
+"$PROJECT_ROOT/scripts/launch_local_app.sh" >/dev/null 2>&1 &
+exit 0

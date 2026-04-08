@@ -1,0 +1,20 @@
+.env
+.streamlit/secrets.toml
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+exports/
+.DS_Store
+*.log
+tmp/
+LLM Experiment Launcher.app/Contents/_CodeSignature/
