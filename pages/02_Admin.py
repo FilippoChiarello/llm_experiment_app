@@ -28,6 +28,10 @@ from services.settings import EXPORTS_DIR, get_admin_password, get_database_path
 def get_database() -> Database:
     database = Database(get_database_path())
     database.init_schema()
+    app_config = load_app_config()
+    for code in app_config.get("demo_access_codes", []):
+        if isinstance(code, str) and code.strip():
+            database.ensure_access_code(code.strip().upper())
     return database
 
 

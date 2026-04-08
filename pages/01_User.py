@@ -99,6 +99,9 @@ def get_service() -> ExperimentService:
     survey_config = load_survey_config()
     database = Database(get_database_path())
     database.init_schema()
+    for code in app_config.get("demo_access_codes", []):
+        if isinstance(code, str) and code.strip():
+            database.ensure_access_code(code.strip().upper())
     return ExperimentService(database, app_config, prompts_config, survey_config)
 
 

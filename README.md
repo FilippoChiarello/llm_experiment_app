@@ -33,6 +33,7 @@ For immediate local testing, the project includes a demo bootstrap flow.
 - Demo participant code 2: `DEMO1002`
 
 The launcher resets those two participant codes back to `new` each time it starts the app, so you can test repeatedly.
+On deployed environments, the app now also auto-creates the configured demo participant codes if they do not exist yet.
 
 ## Struttura del progetto
 

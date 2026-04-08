@@ -100,6 +100,11 @@ def main() -> None:
         """,
         unsafe_allow_html=True,
     )
+    if app_config.get("demo_access_codes"):
+        st.caption(
+            "Configured demo participant codes: "
+            + ", ".join(f"`{code}`" for code in app_config["demo_access_codes"])
+        )
 
     st.caption(f"Local database path: {get_database_path()}")
 

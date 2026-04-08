@@ -5,6 +5,9 @@ randomization_mode: balanced
 llm_mode: mock
 llm_provider: openai
 allow_resume: true
+demo_access_codes:
+  - "DEMO1001"
+  - "DEMO1002"
 privacy_version: "v1"
 privacy_notice_text: >
   By continuing, you confirm that you have read this privacy notice and that you voluntarily

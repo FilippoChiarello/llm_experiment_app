@@ -56,6 +56,7 @@ def load_app_config(path: Path = APP_CONFIG_PATH) -> Dict[str, Any]:
     data.setdefault("llm_mode", "mock")
     data.setdefault("llm_provider", "openai")
     data.setdefault("allow_resume", True)
+    data.setdefault("demo_access_codes", [])
     data.setdefault("privacy_version", "v1")
     data.setdefault(
         "privacy_notice_text",
@@ -89,6 +90,7 @@ def load_app_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     data.setdefault("llm_mode", "mock")
     data.setdefault("llm_provider", "openai")
     data.setdefault("allow_resume", True)
+    data.setdefault("demo_access_codes", [])
     data.setdefault("privacy_version", "v1")
     data.setdefault(
         "privacy_notice_text",
