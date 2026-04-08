@@ -70,6 +70,27 @@ def apply_admin_theme() -> None:
             border: 1px solid rgba(15, 23, 42, 0.08);
             box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
         }
+        .workflow-card {
+            padding: 1rem 1.1rem;
+            border-radius: 22px;
+            background: rgba(255,255,255,0.9);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+            margin-bottom: 1rem;
+        }
+        .pill-row {
+            margin-bottom: 0.9rem;
+        }
+        .status-pill {
+            display: inline-block;
+            padding: 0.4rem 0.75rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.84);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            color: #405162;
+            font-size: 0.9rem;
+            margin: 0 0.45rem 0.45rem 0;
+        }
         .admin-soft-note {
             background: rgba(255,255,255,0.82);
             border: 1px solid rgba(15, 23, 42, 0.08);
@@ -106,15 +127,17 @@ def apply_admin_theme() -> None:
 def render_login() -> None:
     configured_password = get_admin_password()
     st.subheader("Admin Sign In")
-    st.write("Use the admin password to access study configuration, analytics, exports, and participant code management.")
+    st.write("Use the admin password to open the study control area for setup, participant management, analytics, and exports.")
     if not configured_password:
         st.warning(
             "Admin password not configured. First create a local `.env` file with `ADMIN_PASSWORD=...`."
         )
         st.stop()
-    with st.form("admin_login"):
-        password = st.text_input("Admin password", type="password")
-        submitted = st.form_submit_button("Sign in")
+    with st.container(border=True):
+        st.caption("Only researchers or study operators should use this page.")
+        with st.form("admin_login"):
+            password = st.text_input("Admin password", type="password")
+            submitted = st.form_submit_button("Sign in", use_container_width=True)
     if submitted:
         if password == configured_password:
             st.session_state["admin_authenticated"] = True
@@ -164,7 +187,7 @@ def _format_likert_options(question: Dict[str, Any]) -> str:
 def render_app_settings() -> None:
     app_config = load_app_config()
     st.markdown("### General Settings")
-    st.write("Control the overall study behavior, provider defaults, and participant consent notice from one place.")
+    st.write("Start here when you want to change the overall study behavior, provider defaults, or the participant consent text.")
     with st.form("app_settings_form"):
         title = st.text_input("App title", value=app_config["title"])
         experiment_open = st.checkbox("Experiment open to new participants", value=app_config["experiment_open"])
@@ -208,6 +231,10 @@ def render_app_settings() -> None:
         save_app_config(updated)
         st.success("app.yaml updated.")
         st.rerun()
+    st.markdown(
+        '<div class="admin-soft-note">Recommended workflow: keep the experiment closed while you edit settings, then open it only when participant codes are ready to distribute.</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_conditions_manager() -> None:
@@ -215,8 +242,15 @@ def render_conditions_manager() -> None:
     prompts_config = load_prompts_config()
     conditions = prompts_config["conditions"]
     st.markdown("### Experimental Conditions")
-    st.write("Manage experimental conditions here without changing the application code.")
-    st.dataframe(_summarize_conditions(conditions), use_container_width=True)
+    st.write("Manage the experimental arms here without changing application code.")
+    active_count = len([condition for condition in conditions if condition["active"]])
+    provider_count = len({condition.get("provider", "openai") for condition in conditions})
+    summary_col1, summary_col2, summary_col3 = st.columns(3)
+    summary_col1.metric("Total conditions", len(conditions))
+    summary_col2.metric("Active conditions", active_count)
+    summary_col3.metric("Providers in use", provider_count)
+    with st.expander("View condition summary", expanded=False):
+        st.dataframe(_summarize_conditions(conditions), use_container_width=True, hide_index=True)
 
     selected_condition_id = st.selectbox(
         "Choose a condition to edit",
@@ -406,16 +440,22 @@ def render_conditions_manager() -> None:
             st.success("Condition removed.")
             st.rerun()
 
-    st.divider()
-    st.caption("Advanced YAML editor for more complex cases.")
-    render_yaml_editor("Advanced prompts.yaml editor", PROMPTS_CONFIG_PATH, save_prompts_config)
+    st.markdown(
+        '<div class="admin-soft-note">Tip: keep at least two active conditions only if you really need random assignment. For simpler pilots, one active condition is usually easier to manage.</div>',
+        unsafe_allow_html=True,
+    )
+    with st.expander("Advanced prompts.yaml editor", expanded=False):
+        render_yaml_editor("Advanced prompts.yaml editor", PROMPTS_CONFIG_PATH, save_prompts_config)
 
 
 def render_survey_manager() -> None:
     survey_config = load_survey_config()
     sections = survey_config["sections"]
     st.markdown("### Survey")
-    st.write("Edit survey sections and questions directly here.")
+    st.write("Edit the participant survey here. The basic workflow is: choose a section, edit its questions, then add new items only if needed.")
+    section_col1, section_col2 = st.columns(2)
+    section_col1.metric("Sections", len(sections))
+    section_col2.metric("Questions", sum(len(section["questions"]) for section in sections))
 
     selected_section_id = st.selectbox(
         "Choose a section",
@@ -594,13 +634,15 @@ def render_survey_manager() -> None:
             st.success("Section added.")
             st.rerun()
 
-    st.divider()
-    st.caption("Advanced YAML editor for the full survey.")
-    render_yaml_editor("Advanced survey.yaml editor", SURVEY_CONFIG_PATH, save_survey_config)
+    st.markdown(
+        '<div class="admin-soft-note">Tip: keep the survey short unless the research design truly requires more. Shorter surveys usually improve completion quality.</div>',
+        unsafe_allow_html=True,
+    )
+    with st.expander("Advanced survey.yaml editor", expanded=False):
+        render_yaml_editor("Advanced survey.yaml editor", SURVEY_CONFIG_PATH, save_survey_config)
 
 
 def render_yaml_editor(title: str, path: Path, save_fn) -> None:
-    st.markdown(f"### {title}")
     content = path.read_text(encoding="utf-8")
     edited = st.text_area(f"Edit {path.name}", value=content, height=420)
     if st.button(f"Save {path.name}", key=f"save_{path.name}"):
@@ -612,6 +654,58 @@ def render_yaml_editor(title: str, path: Path, save_fn) -> None:
             return
         st.success(f"{path.name} updated.")
         st.rerun()
+
+
+def render_study_readiness(app_config: Dict[str, Any], prompts_config: Dict[str, Any], survey_config: Dict[str, Any]) -> None:
+    conditions = prompts_config["conditions"]
+    active_conditions = [condition for condition in conditions if condition["active"]]
+    checks = [
+        (
+            "Participant entry",
+            "Open" if app_config["experiment_open"] else "Closed",
+            "New participants can start the study." if app_config["experiment_open"] else "New participants are currently blocked.",
+        ),
+        (
+            "Experimental conditions",
+            f"{len(active_conditions)} active",
+            "At least one active condition is ready for assignment." if active_conditions else "No active condition is available. New participants cannot be assigned correctly.",
+        ),
+        (
+            "Survey",
+            f"{len(survey_config['sections'])} sections",
+            "The participant survey is available." if survey_config["sections"] else "No survey sections are configured yet.",
+        ),
+        (
+            "LLM mode",
+            str(app_config.get("llm_mode", "mock")).upper(),
+            "Participants will use mock responses." if app_config.get("llm_mode", "mock") == "mock" else "Live model calls are enabled.",
+        ),
+    ]
+    st.markdown("### Study Readiness")
+    for title, status, detail in checks:
+        with st.container(border=True):
+            st.markdown(f"**{title}**")
+            st.caption(status)
+            st.write(detail)
+
+
+def render_overview(database: Database) -> None:
+    app_config, prompts_config, survey_config = _load_configs()
+    pills = [
+        f"Experiment {'open' if app_config['experiment_open'] else 'closed'}",
+        f"LLM mode: {app_config.get('llm_mode', 'mock')}",
+        f"Provider: {app_config.get('llm_provider', 'openai')}",
+        f"Active conditions: {len([c for c in prompts_config['conditions'] if c['active']])}",
+    ]
+    st.markdown(
+        '<div class="pill-row">' + "".join(f'<span class="status-pill">{pill}</span>' for pill in pills) + "</div>",
+        unsafe_allow_html=True,
+    )
+    overview_col, checklist_col = st.columns([1.5, 1])
+    with overview_col:
+        render_dashboard(database)
+    with checklist_col:
+        render_study_readiness(app_config, prompts_config, survey_config)
 
 
 def render_dashboard(database: Database) -> None:
@@ -748,10 +842,25 @@ def render_codes(database: Database) -> None:
         created = database.create_access_codes(int(how_many))
         st.success(f"Created {len(created)} codes.")
         st.code("\n".join(created))
+        st.download_button(
+            label="Download generated codes (.txt)",
+            data="\n".join(created).encode("utf-8"),
+            file_name="participant_codes.txt",
+            mime="text/plain",
+            key="download_generated_codes_txt",
+        )
     st.markdown("### Recent Codes")
     recent_codes = database.list_recent_access_codes(limit=50)
     if recent_codes:
-        st.dataframe(recent_codes, use_container_width=True)
+        recent_df = pd.DataFrame(recent_codes)
+        status_filter = st.multiselect(
+            "Filter by status",
+            options=sorted(recent_df["status"].dropna().unique().tolist()),
+            default=sorted(recent_df["status"].dropna().unique().tolist()),
+        )
+        if status_filter:
+            recent_df = recent_df[recent_df["status"].isin(status_filter)]
+        st.dataframe(recent_df, use_container_width=True, hide_index=True)
     else:
         st.info("No codes available.")
     st.markdown(
@@ -762,7 +871,7 @@ def render_codes(database: Database) -> None:
 
 def render_export(database: Database) -> None:
     st.markdown("### CSV Export")
-    st.write("Choose between raw operational data and a more polished reporting package.")
+    st.write("Choose the export format based on what you need right now: raw tables for analysis pipelines, or a polished package for review and sharing.")
     raw_col, publication_col = st.columns(2)
     with raw_col:
         if st.button("Generate raw CSV export"):
@@ -824,9 +933,11 @@ def main() -> None:
         render_login()
         st.stop()
 
-    if st.button("Sign out"):
-        st.session_state["admin_authenticated"] = False
-        st.rerun()
+    action_col1, action_col2 = st.columns([5, 1])
+    with action_col2:
+        if st.button("Sign out", use_container_width=True):
+            st.session_state["admin_authenticated"] = False
+            st.rerun()
 
     try:
         database = get_database()
@@ -837,21 +948,33 @@ def main() -> None:
         st.error(f"Configuration error: {exc}")
         st.stop()
 
-    tab_dashboard, tab_app, tab_conditions, tab_survey, tab_codes, tab_export = st.tabs(
-        ["Dashboard", "Settings", "Conditions", "Survey", "Codes", "Export"]
+    top_tab_overview, top_tab_setup, top_tab_participants, top_tab_export = st.tabs(
+        ["Overview", "Study Setup", "Participants", "Export"]
     )
 
-    with tab_dashboard:
-        render_dashboard(database)
-    with tab_app:
-        render_app_settings()
-    with tab_conditions:
-        render_conditions_manager()
-    with tab_survey:
-        render_survey_manager()
-    with tab_codes:
+    with top_tab_overview:
+        render_overview(database)
+    with top_tab_setup:
+        st.markdown(
+            '<div class="admin-soft-note">Use this area to configure the study before you distribute participant codes. The usual order is General Settings, then Conditions, then Survey.</div>',
+            unsafe_allow_html=True,
+        )
+        setup_tab_general, setup_tab_conditions, setup_tab_survey = st.tabs(
+            ["General Settings", "Conditions", "Survey"]
+        )
+        with setup_tab_general:
+            render_app_settings()
+        with setup_tab_conditions:
+            render_conditions_manager()
+        with setup_tab_survey:
+            render_survey_manager()
+    with top_tab_participants:
+        st.markdown(
+            '<div class="admin-soft-note">Use this area during live data collection to generate codes, check recent participant progress, and monitor operational status.</div>',
+            unsafe_allow_html=True,
+        )
         render_codes(database)
-    with tab_export:
+    with top_tab_export:
         render_export(database)
 
 
