@@ -132,138 +132,128 @@ def reset_user_flow() -> None:
 
 
 def render_code_gate(service: ExperimentService) -> None:
-    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
-    st.subheader("Participant Access")
-    st.write("Please enter your one-time access code to begin or resume your session.")
-    with st.form("user_code_form", clear_on_submit=False):
-        code_value = st.text_input("Enter your one-time code").strip().upper()
-        submitted = st.form_submit_button("Continue")
-    if submitted:
-        result = service.enter_code(code_value)
-        if not result["ok"]:
-            st.error(result["message"])
-            st.markdown("</div>", unsafe_allow_html=True)
-            return
-        st.session_state["user_code"] = code_value
-        st.session_state["user_state"] = result["data"]
-        st.success("Access granted.")
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Participant Access")
+        st.write("Please enter your one-time access code to begin or resume your session.")
+        with st.form("user_code_form", clear_on_submit=False):
+            code_value = st.text_input("Enter your one-time code").strip().upper()
+            submitted = st.form_submit_button("Continue")
+        if submitted:
+            result = service.enter_code(code_value)
+            if not result["ok"]:
+                st.error(result["message"])
+                return
+            st.session_state["user_code"] = code_value
+            st.session_state["user_state"] = result["data"]
+            st.success("Access granted.")
+            st.rerun()
 
 
 def render_consent(service: ExperimentService, code: str, state: Dict[str, object]) -> None:
-    st.markdown('<div class="consent-card">', unsafe_allow_html=True)
-    st.subheader("Privacy Notice and Consent")
-    st.write("Please review the information below before starting the study chat.")
-    st.markdown(
-        f"""
-        <div class="consent-box">
-            <strong>Consent version:</strong> {state['consent_version']}<br><br>
-            {state['consent_text_snapshot']}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    with st.form("consent_form"):
-        confirmed = st.checkbox(
-            "I have read the privacy notice and I consent to participate in this study."
+    with st.container(border=True):
+        st.subheader("Privacy Notice and Consent")
+        st.write("Please review the information below before starting the study chat.")
+        st.markdown(
+            f"""
+            <div class="consent-box">
+                <strong>Consent version:</strong> {state['consent_version']}<br><br>
+                {state['consent_text_snapshot']}
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        no_sensitive_data = st.checkbox(
-            "I understand that I should avoid sharing unnecessary personal or sensitive information."
-        )
-        submitted = st.form_submit_button("Accept and continue")
-    if submitted:
-        if not confirmed or not no_sensitive_data:
-            st.error("Please confirm both statements before continuing.")
-            st.markdown("</div>", unsafe_allow_html=True)
-            return
-        result = service.record_consent(code)
-        if result["ok"]:
-            st.session_state["user_state"] = result["data"]
-            st.rerun()
-        st.error(result["message"])
-    st.markdown("</div>", unsafe_allow_html=True)
+        with st.form("consent_form"):
+            confirmed = st.checkbox(
+                "I have read the privacy notice and I consent to participate in this study."
+            )
+            no_sensitive_data = st.checkbox(
+                "I understand that I should avoid sharing unnecessary personal or sensitive information."
+            )
+            submitted = st.form_submit_button("Accept and continue")
+        if submitted:
+            if not confirmed or not no_sensitive_data:
+                st.error("Please confirm both statements before continuing.")
+                return
+            result = service.record_consent(code)
+            if result["ok"]:
+                st.session_state["user_state"] = result["data"]
+                st.rerun()
+            st.error(result["message"])
 
 
 def render_chat(service: ExperimentService, code: str, state: Dict[str, object]) -> None:
-    st.markdown('<div class="chat-shell">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
-    st.subheader("Experiment Chat")
-    if state["unlimited_turns"]:
-        st.caption("There is no fixed turn limit for this session.")
-    else:
-        st.caption(f"Messages used: {state['turn_count']} / {state['max_turns']}")
-    for message in state["messages"]:
-        with st.chat_message("user"):
-            st.write(message["user_text"])
-        with st.chat_message("assistant"):
-            st.write(message["assistant_text"])
-
-    if not state["can_chat"]:
-        st.info("You have reached the maximum number of chat turns. Please continue to the survey.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
-    user_input = st.chat_input("Write your message")
-    if user_input:
-        result = service.submit_user_message(code, user_input)
-        if result["ok"]:
-            st.session_state["user_state"] = result["data"]
-            st.rerun()
+    with st.container(border=True):
+        st.subheader("Experiment Chat")
+        if state["unlimited_turns"]:
+            st.caption("There is no fixed turn limit for this session.")
         else:
-            st.error(result["message"])
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+            st.caption(f"Messages used: {state['turn_count']} / {state['max_turns']}")
+        for message in state["messages"]:
+            with st.chat_message("user"):
+                st.write(message["user_text"])
+            with st.chat_message("assistant"):
+                st.write(message["assistant_text"])
+
+        if not state["can_chat"]:
+            st.info("You have reached the maximum number of chat turns. Please continue to the survey.")
+            return
+
+        user_input = st.chat_input("Write your message")
+        if user_input:
+            result = service.submit_user_message(code, user_input)
+            if result["ok"]:
+                st.session_state["user_state"] = result["data"]
+                st.rerun()
+            else:
+                st.error(result["message"])
 
 
 def render_survey(service: ExperimentService, code: str, state: Dict[str, object]) -> None:
-    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
-    st.subheader("Final Survey")
-    st.write("Please answer the final questions below to complete your participation.")
-    survey_snapshot = state["survey_snapshot"]
-    answers = {}
-    with st.form("survey_form"):
-        for section in survey_snapshot["sections"]:
-            st.markdown(f"### {section['title']}")
-            if section.get("description"):
-                st.write(section["description"])
-            for question in section["questions"]:
-                key = f"survey_{question['id']}"
-                if question["type"] == "likert":
-                    labels = [option["label"] for option in question["options"]]
-                    selected_label = st.radio(question["text"], labels, key=key, index=None)
-                    selected_option = next(
-                        (option for option in question["options"] if option["label"] == selected_label),
-                        None,
-                    )
-                    answers[question["id"]] = {
-                        "value": selected_option["value"] if selected_option else "",
-                        "label": selected_option["label"] if selected_option else "",
-                    }
-                else:
-                    free_text = st.text_area(question["text"], key=key)
-                    answers[question["id"]] = {"value": free_text, "label": free_text}
-        submitted = st.form_submit_button("Submit survey")
-    if submitted:
-        missing_likert = [
-            question["id"]
-            for section in survey_snapshot["sections"]
-            for question in section["questions"]
-            if question["type"] == "likert" and not answers[question["id"]]["value"]
-        ]
-        if missing_likert:
-            st.error("Please answer all Likert questions before submitting the survey.")
-            st.markdown("</div>", unsafe_allow_html=True)
-            return
-        result = service.submit_survey(code, answers)
-        if result["ok"]:
-            st.success("Survey submitted. Thank you for participating.")
-            st.session_state["user_state"] = None
-            st.session_state["user_code"] = code
-            st.session_state["completed_message"] = True
-            st.rerun()
-        st.error(result["message"])
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Final Survey")
+        st.write("Please answer the final questions below to complete your participation.")
+        survey_snapshot = state["survey_snapshot"]
+        answers = {}
+        with st.form("survey_form"):
+            for section in survey_snapshot["sections"]:
+                st.markdown(f"### {section['title']}")
+                if section.get("description"):
+                    st.write(section["description"])
+                for question in section["questions"]:
+                    key = f"survey_{question['id']}"
+                    if question["type"] == "likert":
+                        labels = [option["label"] for option in question["options"]]
+                        selected_label = st.radio(question["text"], labels, key=key, index=None)
+                        selected_option = next(
+                            (option for option in question["options"] if option["label"] == selected_label),
+                            None,
+                        )
+                        answers[question["id"]] = {
+                            "value": selected_option["value"] if selected_option else "",
+                            "label": selected_option["label"] if selected_option else "",
+                        }
+                    else:
+                        free_text = st.text_area(question["text"], key=key)
+                        answers[question["id"]] = {"value": free_text, "label": free_text}
+            submitted = st.form_submit_button("Submit survey")
+        if submitted:
+            missing_likert = [
+                question["id"]
+                for section in survey_snapshot["sections"]
+                for question in section["questions"]
+                if question["type"] == "likert" and not answers[question["id"]]["value"]
+            ]
+            if missing_likert:
+                st.error("Please answer all Likert questions before submitting the survey.")
+                return
+            result = service.submit_survey(code, answers)
+            if result["ok"]:
+                st.success("Survey submitted. Thank you for participating.")
+                st.session_state["user_state"] = None
+                st.session_state["user_code"] = code
+                st.session_state["completed_message"] = True
+                st.rerun()
+            st.error(result["message"])
 
 
 def render_completion_page() -> None:
@@ -346,10 +336,9 @@ def main() -> None:
             render_consent(service, code, state)
         with chat_tab:
             if not state["consent_complete"]:
-                st.markdown('<div class="panel-card">', unsafe_allow_html=True)
-                st.subheader("Experiment Chat")
-                st.info("Please complete the consent step first. The chat will unlock immediately after consent.")
-                st.markdown("</div>", unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.subheader("Experiment Chat")
+                    st.info("Please complete the consent step first. The chat will unlock immediately after consent.")
             else:
                 render_chat(service, code, state)
         st.markdown(
