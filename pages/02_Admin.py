@@ -70,14 +70,6 @@ def apply_admin_theme() -> None:
             border: 1px solid rgba(15, 23, 42, 0.08);
             box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
         }
-        .admin-section-card {
-            background: rgba(255,255,255,0.92);
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            border-radius: 24px;
-            padding: 1.2rem 1.3rem;
-            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
-            margin-bottom: 1rem;
-        }
         .admin-soft-note {
             background: rgba(255,255,255,0.82);
             border: 1px solid rgba(15, 23, 42, 0.08);
@@ -113,14 +105,12 @@ def apply_admin_theme() -> None:
 
 def render_login() -> None:
     configured_password = get_admin_password()
-    st.markdown('<div class="admin-section-card">', unsafe_allow_html=True)
     st.subheader("Admin Sign In")
     st.write("Use the admin password to access study configuration, analytics, exports, and participant code management.")
     if not configured_password:
         st.warning(
             "Admin password not configured. First create a local `.env` file with `ADMIN_PASSWORD=...`."
         )
-        st.markdown("</div>", unsafe_allow_html=True)
         st.stop()
     with st.form("admin_login"):
         password = st.text_input("Admin password", type="password")
@@ -131,7 +121,6 @@ def render_login() -> None:
             st.success("Admin login successful.")
             st.rerun()
         st.error("Incorrect password.")
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _load_configs() -> tuple[dict, dict, dict]:
@@ -174,7 +163,6 @@ def _format_likert_options(question: Dict[str, Any]) -> str:
 
 def render_app_settings() -> None:
     app_config = load_app_config()
-    st.markdown('<div class="admin-section-card">', unsafe_allow_html=True)
     st.markdown("### General Settings")
     st.write("Control the overall study behavior, provider defaults, and participant consent notice from one place.")
     with st.form("app_settings_form"):
@@ -220,14 +208,12 @@ def render_app_settings() -> None:
         save_app_config(updated)
         st.success("app.yaml updated.")
         st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_conditions_manager() -> None:
     app_config = load_app_config()
     prompts_config = load_prompts_config()
     conditions = prompts_config["conditions"]
-    st.markdown('<div class="admin-section-card">', unsafe_allow_html=True)
     st.markdown("### Experimental Conditions")
     st.write("Manage experimental conditions here without changing the application code.")
     st.dataframe(_summarize_conditions(conditions), use_container_width=True)
@@ -423,13 +409,11 @@ def render_conditions_manager() -> None:
     st.divider()
     st.caption("Advanced YAML editor for more complex cases.")
     render_yaml_editor("Advanced prompts.yaml editor", PROMPTS_CONFIG_PATH, save_prompts_config)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_survey_manager() -> None:
     survey_config = load_survey_config()
     sections = survey_config["sections"]
-    st.markdown('<div class="admin-section-card">', unsafe_allow_html=True)
     st.markdown("### Survey")
     st.write("Edit survey sections and questions directly here.")
 
@@ -613,7 +597,6 @@ def render_survey_manager() -> None:
     st.divider()
     st.caption("Advanced YAML editor for the full survey.")
     render_yaml_editor("Advanced survey.yaml editor", SURVEY_CONFIG_PATH, save_survey_config)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_yaml_editor(title: str, path: Path, save_fn) -> None:
@@ -632,7 +615,6 @@ def render_yaml_editor(title: str, path: Path, save_fn) -> None:
 
 
 def render_dashboard(database: Database) -> None:
-    st.markdown('<div class="admin-section-card">', unsafe_allow_html=True)
     stats = database.count_access_codes_by_status()
     sessions_by_condition = database.count_sessions_by_condition()
     col1, col2, col3, col4 = st.columns(4)
@@ -677,7 +659,6 @@ def render_dashboard(database: Database) -> None:
 
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
-        st.markdown('<div class="analytics-card">', unsafe_allow_html=True)
         st.markdown("#### Sessions by Condition")
         if not condition_df.empty:
             chart = (
@@ -695,9 +676,7 @@ def render_dashboard(database: Database) -> None:
             st.dataframe(condition_df, use_container_width=True, hide_index=True)
         else:
             st.info("No condition data yet.")
-        st.markdown("</div>", unsafe_allow_html=True)
     with chart_col2:
-        st.markdown('<div class="analytics-card">', unsafe_allow_html=True)
         st.markdown("#### Session Turn Distribution")
         if not turn_df.empty:
             chart = (
@@ -713,7 +692,6 @@ def render_dashboard(database: Database) -> None:
             st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No turn distribution available yet.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("### Activity Over Time")
     if not daily_df.empty:
@@ -759,11 +737,9 @@ def render_dashboard(database: Database) -> None:
         '<div class="admin-soft-note">Tip: use this dashboard as the quick operational view, then use Export when you want formatted outputs for reporting or collaboration.</div>',
         unsafe_allow_html=True,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_codes(database: Database) -> None:
-    st.markdown('<div class="admin-section-card">', unsafe_allow_html=True)
     st.markdown("### Generate One-Time Codes")
     with st.form("generate_codes_form"):
         how_many = st.number_input("Number of codes to generate", min_value=1, max_value=500, value=5)
@@ -782,11 +758,9 @@ def render_codes(database: Database) -> None:
         '<div class="admin-soft-note">For a live study session, generate a small batch of fresh participant codes here and distribute them privately.</div>',
         unsafe_allow_html=True,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_export(database: Database) -> None:
-    st.markdown('<div class="admin-section-card">', unsafe_allow_html=True)
     st.markdown("### CSV Export")
     st.write("Choose between raw operational data and a more polished reporting package.")
     raw_col, publication_col = st.columns(2)
@@ -828,7 +802,6 @@ def render_export(database: Database) -> None:
         existing = sorted(EXPORTS_DIR.glob("export_*"))
         if existing:
             st.caption(f"Local export folder: {EXPORTS_DIR}")
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def main() -> None:
