@@ -49,8 +49,8 @@ def load_app_config(path: Path = APP_CONFIG_PATH) -> Dict[str, Any]:
         raise ConfigError("app.yaml: 'title' must be a non-empty string")
     if not isinstance(data["experiment_open"], bool):
         raise ConfigError("app.yaml: 'experiment_open' must be true or false")
-    if not isinstance(data["max_turns"], int) or data["max_turns"] <= 0:
-        raise ConfigError("app.yaml: 'max_turns' must be a positive integer")
+    if not isinstance(data["max_turns"], int) or data["max_turns"] < 0:
+        raise ConfigError("app.yaml: 'max_turns' must be a non-negative integer")
     if data["randomization_mode"] != "balanced":
         raise ConfigError("app.yaml: only 'balanced' randomization_mode is supported")
     data.setdefault("llm_mode", "mock")
@@ -83,8 +83,8 @@ def load_app_config_dict(data: Dict[str, Any]) -> Dict[str, Any]:
         raise ConfigError("app config: 'title' must be a non-empty string")
     if not isinstance(data["experiment_open"], bool):
         raise ConfigError("app config: 'experiment_open' must be true or false")
-    if not isinstance(data["max_turns"], int) or data["max_turns"] <= 0:
-        raise ConfigError("app config: 'max_turns' must be a positive integer")
+    if not isinstance(data["max_turns"], int) or data["max_turns"] < 0:
+        raise ConfigError("app config: 'max_turns' must be a non-negative integer")
     if data["randomization_mode"] != "balanced":
         raise ConfigError("app config: only 'balanced' randomization_mode is supported")
     data.setdefault("llm_mode", "mock")
@@ -115,7 +115,7 @@ def validate_prompts_config(data: Dict[str, Any], file_label: str = "prompts.yam
     for index, condition in enumerate(conditions):
         if not isinstance(condition, dict):
             raise ConfigError(f"{file_label}: condition #{index + 1} must be an object")
-        for field_name in ["id", "active", "model", "temperature", "system_prompt"]:
+        for field_name in ["id", "active", "model", "system_prompt"]:
             if field_name not in condition:
                 raise ConfigError(
                     f"{file_label}: missing required field '{field_name}' in condition #{index + 1}"
@@ -126,14 +126,23 @@ def validate_prompts_config(data: Dict[str, Any], file_label: str = "prompts.yam
             raise ConfigError(f"{file_label}: condition '{condition['id']}' active must be true or false")
         if not isinstance(condition["model"], str) or not condition["model"].strip():
             raise ConfigError(f"{file_label}: condition '{condition['id']}' model must be a non-empty string")
-        if not isinstance(condition["temperature"], (int, float)):
+        if condition.get("temperature") is not None and not isinstance(condition["temperature"], (int, float)):
             raise ConfigError(f"{file_label}: condition '{condition['id']}' temperature must be numeric")
+        if condition.get("max_output_tokens") is not None and (
+            not isinstance(condition["max_output_tokens"], int) or condition["max_output_tokens"] <= 0
+        ):
+            raise ConfigError(
+                f"{file_label}: condition '{condition['id']}' max_output_tokens must be a positive integer or null"
+            )
         if not isinstance(condition["system_prompt"], str) or not condition["system_prompt"].strip():
             raise ConfigError(
                 f"{file_label}: condition '{condition['id']}' system_prompt must be a non-empty string"
             )
+        condition.setdefault("provider", "openai")
+        condition.setdefault("temperature", 0.7)
         condition.setdefault("max_output_tokens", 400)
         condition.setdefault("top_p", 1.0)
+        condition.setdefault("reasoning_effort", "none")
 
 
 def save_prompts_config(data: Dict[str, Any], path: Path = PROMPTS_CONFIG_PATH) -> None:

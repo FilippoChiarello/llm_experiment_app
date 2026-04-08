@@ -34,7 +34,9 @@ class ExperimentService:
     def _session_payload(self, session: Dict[str, Any], code_record: Dict[str, Any]) -> Dict[str, Any]:
         messages = self.database.list_messages(session["session_id"])
         turn_count = len(messages)
-        needs_survey = session["status"] == "survey_pending" or turn_count >= int(session["max_turns"])
+        max_turns = int(session["max_turns"])
+        unlimited_turns = max_turns == 0
+        needs_survey = session["status"] == "survey_pending" or (not unlimited_turns and turn_count >= max_turns)
         consent_complete = bool(session.get("consent_given_at"))
         can_chat = code_record["status"] == "in_progress" and not needs_survey and consent_complete
         return {
@@ -45,7 +47,8 @@ class ExperimentService:
             "session_status": session["status"],
             "messages": messages,
             "turn_count": turn_count,
-            "max_turns": int(session["max_turns"]),
+            "max_turns": max_turns,
+            "unlimited_turns": unlimited_turns,
             "needs_survey": needs_survey,
             "can_chat": can_chat,
             "consent_complete": consent_complete,
@@ -86,7 +89,7 @@ class ExperimentService:
                 return {
                     "ok": False,
                     "reason": "config_error",
-                    "message": f"Configurazione non valida: {exc}",
+                    "message": f"Invalid configuration: {exc}",
                 }
             counts = self.database.count_sessions_by_condition()
             chosen_condition = choose_balanced_condition(active_conditions, counts)
@@ -160,7 +163,7 @@ class ExperimentService:
             assistant_text=assistant_text,
             latency_ms=latency_ms,
         )
-        if turn_index >= payload["max_turns"]:
+        if not payload["unlimited_turns"] and turn_index >= payload["max_turns"]:
             self.database.update_session(payload["session_id"], status="survey_pending")
         code_state = self.enter_code(code)
         if not code_state["ok"]:

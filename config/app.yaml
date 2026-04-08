@@ -1,22 +1,78 @@
-title: "LLM Experiment App"
+title: LLM Experiment App
 experiment_open: true
-max_turns: 3
+max_turns: 15
 randomization_mode: balanced
-llm_mode: mock
+llm_mode: openai
 llm_provider: openai
 allow_resume: true
 demo_access_codes:
-  - "DEMO1001"
-  - "DEMO1002"
-privacy_version: "v1"
-privacy_notice_text: >
-  By continuing, you confirm that you have read this privacy notice and that you voluntarily
-  agree to participate in this research study. Your chat messages, questionnaire responses,
-  assigned experimental condition, and associated timestamps will be stored and processed for
-  research, analysis, and reporting purposes. The data collected through this app may be reviewed
-  by the research team and may be included in aggregated or anonymized outputs. Please do not enter
-  unnecessary personal data or any special-category sensitive information in the chat. You may stop
-  participating at any time before submission by leaving the session; however, information already
-  submitted during the study session may be retained for research integrity, logging, and compliance
-  purposes. By selecting the consent checkbox, you confirm that you understand these terms and agree
-  to the processing described here.
+- DEMO1001
+- DEMO1002
+llm_model_catalog:
+  openai:
+  - id: gpt-5.4
+    label: GPT-5.4
+    family: reasoning
+    supports_reasoning_effort: true
+    supports_sampling: false
+  - id: gpt-5.4-mini
+    label: GPT-5.4 mini
+    family: reasoning
+    supports_reasoning_effort: true
+    supports_sampling: false
+  - id: gpt-5.4-nano
+    label: GPT-5.4 nano
+    family: reasoning
+    supports_reasoning_effort: true
+    supports_sampling: false
+  - id: gpt-4.1
+    label: GPT-4.1
+    family: general
+    supports_reasoning_effort: false
+    supports_sampling: false
+  - id: gpt-4.1-mini
+    label: GPT-4.1 mini
+    family: general
+    supports_reasoning_effort: false
+    supports_sampling: false
+  - id: gpt-4.1-nano
+    label: GPT-4.1 nano
+    family: general
+    supports_reasoning_effort: false
+    supports_sampling: false
+  groq:
+  - id: openai/gpt-oss-20b
+    label: gpt-oss-20b via Groq
+    family: open_weight
+    supports_reasoning_effort: false
+    supports_sampling: true
+  openrouter:
+  - id: openrouter/free
+    label: OpenRouter free router
+    family: router
+    supports_reasoning_effort: false
+    supports_sampling: true
+  - id: openai/gpt-oss-20b:free
+    label: gpt-oss-20b free
+    family: open_weight
+    supports_reasoning_effort: false
+    supports_sampling: true
+  huggingface:
+  - id: openai/gpt-oss-20b
+    label: gpt-oss-20b via Hugging Face router
+    family: open_weight
+    supports_reasoning_effort: false
+    supports_sampling: true
+privacy_version: v1
+privacy_notice_text: By continuing, you confirm that you have read this privacy notice
+  and that you voluntarily agree to participate in this research study. Your chat
+  messages, questionnaire responses, assigned experimental condition, and associated
+  timestamps will be stored and processed for research, analysis, and reporting purposes.
+  The data collected through this app may be reviewed by the research team and may
+  be included in aggregated or anonymized outputs. Please do not enter unnecessary
+  personal data or any special-category sensitive information in the chat. You may
+  stop participating at any time before submission by leaving the session; however,
+  information already submitted during the study session may be retained for research
+  integrity, logging, and compliance purposes. By selecting the consent checkbox,
+  you confirm that you understand these terms and agree to the processing described
+  here.

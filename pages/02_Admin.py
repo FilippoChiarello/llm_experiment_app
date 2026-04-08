@@ -22,6 +22,7 @@ from services.config_loader import (
 )
 from services.db import Database
 from services.export import create_publication_export, export_all_tables
+from services.model_catalog import get_provider_model_options
 from services.settings import EXPORTS_DIR, get_admin_password, get_database_path
 
 
@@ -94,10 +95,12 @@ def _summarize_conditions(conditions: List[Dict[str, Any]]) -> List[Dict[str, An
         {
             "id": condition["id"],
             "active": condition["active"],
+            "provider": condition.get("provider", "openai"),
             "model": condition["model"],
             "temperature": condition["temperature"],
             "top_p": condition.get("top_p", 1.0),
             "max_output_tokens": condition.get("max_output_tokens", 400),
+            "reasoning_effort": condition.get("reasoning_effort", "none"),
         }
         for condition in conditions
     ]
@@ -127,7 +130,14 @@ def render_app_settings() -> None:
     with st.form("app_settings_form"):
         title = st.text_input("App title", value=app_config["title"])
         experiment_open = st.checkbox("Experiment open to new participants", value=app_config["experiment_open"])
-        max_turns = st.number_input("Maximum chat turns", min_value=1, value=app_config["max_turns"])
+        unlimited_turns = st.checkbox("Unlimited participant turns", value=app_config["max_turns"] == 0)
+        max_turns = st.number_input(
+            "Maximum chat turns",
+            min_value=1,
+            value=max(1, int(app_config["max_turns"] or 1)),
+            disabled=unlimited_turns,
+            help="Ignored when unlimited turns is enabled.",
+        )
         llm_mode = st.selectbox(
             "LLM mode",
             options=["mock", "openai"],
@@ -152,7 +162,7 @@ def render_app_settings() -> None:
         updated = dict(app_config)
         updated["title"] = title
         updated["experiment_open"] = experiment_open
-        updated["max_turns"] = int(max_turns)
+        updated["max_turns"] = 0 if unlimited_turns else int(max_turns)
         updated["llm_mode"] = llm_mode
         updated["llm_provider"] = llm_provider
         updated["privacy_version"] = privacy_version.strip()
@@ -163,6 +173,7 @@ def render_app_settings() -> None:
 
 
 def render_conditions_manager() -> None:
+    app_config = load_app_config()
     prompts_config = load_prompts_config()
     conditions = prompts_config["conditions"]
     st.markdown("### Experimental Conditions")
@@ -175,16 +186,51 @@ def render_conditions_manager() -> None:
         key="condition_select",
     )
     selected_condition = next(condition for condition in conditions if condition["id"] == selected_condition_id)
+    current_provider = selected_condition.get("provider", app_config.get("llm_provider", "openai"))
+    provider_options = list(app_config.get("llm_model_catalog", {}).keys()) or ["openai", "groq", "openrouter", "huggingface"]
+    provider_index = provider_options.index(current_provider) if current_provider in provider_options else 0
+    current_model_options = get_provider_model_options(current_provider, app_config)
+    current_model_ids = [item["id"] for item in current_model_options]
+    current_model_is_custom = selected_condition["model"] not in current_model_ids
+    current_model_selector = selected_condition["model"] if not current_model_is_custom else "__custom__"
     with st.form("edit_condition_form"):
         condition_id = st.text_input("Condition ID", value=selected_condition["id"])
         active = st.checkbox("Condition active", value=selected_condition["active"])
-        model = st.text_input("Model name", value=selected_condition["model"])
+        provider = st.selectbox("Provider", options=provider_options, index=provider_index)
+        provider_model_options = get_provider_model_options(provider, app_config)
+        provider_model_ids = [item["id"] for item in provider_model_options]
+        model_selector_options = provider_model_ids + ["__custom__"]
+        model_selector_labels = {
+            item["id"]: f"{item['label']} ({item['id']})"
+            for item in provider_model_options
+        }
+        model_selector_labels["__custom__"] = "Custom model id"
+        selected_model_option = st.selectbox(
+            "Model catalog",
+            options=model_selector_options,
+            format_func=lambda value: model_selector_labels.get(value, value),
+            index=model_selector_options.index(current_model_selector)
+            if current_model_selector in model_selector_options
+            else 0,
+        )
+        model = st.text_input(
+            "Model name",
+            value=selected_condition["model"],
+            disabled=selected_model_option != "__custom__",
+        )
+        effective_model = model.strip() if selected_model_option == "__custom__" else selected_model_option
+        selected_model_metadata = next(
+            (item for item in provider_model_options if item["id"] == effective_model),
+            {},
+        )
         temperature = st.number_input(
             "Temperature",
             min_value=0.0,
             max_value=2.0,
-            value=float(selected_condition["temperature"]),
+            value=float(selected_condition.get("temperature", 0.7) or 0.7),
             step=0.1,
+            disabled=provider == "openai",
+            help="Used for OpenAI-compatible chat-completions providers. OpenAI official models use the Responses API path.",
         )
         top_p = st.number_input(
             "Top p",
@@ -192,11 +238,30 @@ def render_conditions_manager() -> None:
             max_value=1.0,
             value=float(selected_condition.get("top_p", 1.0)),
             step=0.05,
+            disabled=provider == "openai",
+            help="Used for OpenAI-compatible chat-completions providers. OpenAI official models use the Responses API path.",
+        )
+        use_provider_default_max_output = st.checkbox(
+            "Let the model/provider decide max output length",
+            value=selected_condition.get("max_output_tokens") is None,
         )
         max_output_tokens = st.number_input(
             "Max output tokens",
             min_value=1,
-            value=int(selected_condition.get("max_output_tokens", 400)),
+            value=int(selected_condition.get("max_output_tokens") or 400),
+            disabled=use_provider_default_max_output,
+            help="When enabled, the request will omit the max output token limit and let the provider use its default behavior.",
+        )
+        reasoning_effort = st.selectbox(
+            "Reasoning effort",
+            options=["none", "low", "medium", "high", "xhigh"],
+            index=["none", "low", "medium", "high", "xhigh"].index(
+                selected_condition.get("reasoning_effort", "none")
+            )
+            if selected_condition.get("reasoning_effort", "none") in ["none", "low", "medium", "high", "xhigh"]
+            else 0,
+            disabled=not selected_model_metadata.get("supports_reasoning_effort", False),
+            help="Best used with current OpenAI reasoning models such as GPT-5.x variants.",
         )
         system_prompt = st.text_area("System prompt", value=selected_condition["system_prompt"], height=220)
         submitted = st.form_submit_button("Save condition")
@@ -213,10 +278,12 @@ def render_conditions_manager() -> None:
                     {
                         "id": condition_id.strip(),
                         "active": active,
-                        "model": model.strip(),
+                        "provider": provider,
+                        "model": effective_model,
                         "temperature": float(temperature),
                         "top_p": float(top_p),
-                        "max_output_tokens": int(max_output_tokens),
+                        "max_output_tokens": None if use_provider_default_max_output else int(max_output_tokens),
+                        "reasoning_effort": reasoning_effort,
                         "system_prompt": system_prompt,
                     }
                 )
@@ -232,10 +299,38 @@ def render_conditions_manager() -> None:
             st.markdown("#### Add New Condition")
             new_id = st.text_input("New ID")
             new_active = st.checkbox("Activate immediately", value=True)
-            new_model = st.text_input("Model name", value="gpt-4.1-mini")
+            new_provider = st.selectbox("Provider", options=provider_options, key="new_condition_provider")
+            new_provider_model_options = get_provider_model_options(new_provider, app_config)
+            new_provider_model_ids = [item["id"] for item in new_provider_model_options]
+            new_model_selector = st.selectbox(
+                "Model catalog",
+                options=new_provider_model_ids + ["__custom__"],
+                format_func=lambda value: (
+                    next((f"{item['label']} ({item['id']})" for item in new_provider_model_options if item["id"] == value), None)
+                    or ("Custom model id" if value == "__custom__" else value)
+                ),
+                key="new_condition_model_selector",
+            )
+            new_model = st.text_input("Model name", value="gpt-4.1-mini", disabled=new_model_selector != "__custom__")
             new_temperature = st.number_input("New condition temperature", min_value=0.0, max_value=2.0, value=0.7, step=0.1)
             new_top_p = st.number_input("New condition top p", min_value=0.0, max_value=1.0, value=1.0, step=0.05)
-            new_max_tokens = st.number_input("New condition max output tokens", min_value=1, value=400)
+            new_use_provider_default_max_output = st.checkbox(
+                "Let the model/provider decide max output length",
+                value=False,
+                key="new_use_provider_default_max_output",
+            )
+            new_max_tokens = st.number_input(
+                "New condition max output tokens",
+                min_value=1,
+                value=400,
+                disabled=new_use_provider_default_max_output,
+            )
+            new_reasoning_effort = st.selectbox(
+                "Reasoning effort",
+                options=["none", "low", "medium", "high", "xhigh"],
+                index=0,
+                key="new_condition_reasoning_effort",
+            )
             new_system_prompt = st.text_area("New condition system prompt", height=180)
             add_submitted = st.form_submit_button("Add condition")
         if add_submitted:
@@ -245,14 +340,17 @@ def render_conditions_manager() -> None:
             if any(condition["id"] == new_id.strip() for condition in conditions):
                 st.error("This ID already exists.")
                 return
+            new_effective_model = new_model.strip() if new_model_selector == "__custom__" else new_model_selector
             updated_conditions = conditions + [
                 {
                     "id": new_id.strip(),
                     "active": new_active,
-                    "model": new_model.strip(),
+                    "provider": new_provider,
+                    "model": new_effective_model,
                     "temperature": float(new_temperature),
                     "top_p": float(new_top_p),
-                    "max_output_tokens": int(new_max_tokens),
+                    "max_output_tokens": None if new_use_provider_default_max_output else int(new_max_tokens),
+                    "reasoning_effort": new_reasoning_effort,
                     "system_prompt": new_system_prompt,
                 }
             ]

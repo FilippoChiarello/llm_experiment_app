@@ -26,6 +26,23 @@ def apply_user_theme() -> None:
                 radial-gradient(circle at bottom right, rgba(214, 246, 229, 0.8), transparent 30%),
                 linear-gradient(180deg, #f7fbff 0%, #eef5f8 55%, #f7fafb 100%);
         }
+        .study-hero {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 28px;
+            padding: 1.5rem 1.6rem;
+            box-shadow: 0 22px 44px rgba(15, 23, 42, 0.07);
+            margin-bottom: 1rem;
+        }
+        .study-kicker {
+            display: inline-block;
+            padding: 0.35rem 0.7rem;
+            border-radius: 999px;
+            background: #edf4fb;
+            color: #2c526f;
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+        }
         .panel-card {
             background: rgba(255,255,255,0.92);
             border: 1px solid rgba(15, 23, 42, 0.08);
@@ -41,37 +58,6 @@ def apply_user_theme() -> None:
             padding: 2rem;
             box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
         }
-        .meta-pill {
-            display: inline-block;
-            padding: 0.35rem 0.7rem;
-            border-radius: 999px;
-            background: #edf5ff;
-            border: 1px solid #d6e6f7;
-            color: #24425a;
-            margin-right: 0.5rem;
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-        }
-        .step-strip {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 0.6rem;
-            margin-bottom: 1rem;
-        }
-        .step-box {
-            padding: 0.75rem 0.8rem;
-            border-radius: 18px;
-            background: rgba(255,255,255,0.86);
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            font-size: 0.9rem;
-            color: #4b5a6a;
-        }
-        .step-box.active {
-            background: linear-gradient(135deg, #e6f3ff, #fff2e6);
-            color: #16324a;
-            border-color: #cfe0ef;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
-        }
         .consent-card {
             background: rgba(255,255,255,0.93);
             border: 1px solid rgba(15, 23, 42, 0.08);
@@ -86,6 +72,41 @@ def apply_user_theme() -> None:
             padding: 1rem;
             color: #405162;
             line-height: 1.55;
+        }
+        div[data-testid="stTabs"] button[role="tab"] {
+            border-radius: 16px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255,255,255,0.78);
+            padding: 0.7rem 1rem;
+            min-height: 56px;
+            transition: all 0.2s ease;
+        }
+        div[data-testid="stTabs"] button[aria-selected="true"] {
+            background: linear-gradient(135deg, #e6f3ff, #fff2e6);
+            border-color: #cfe0ef;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        }
+        div[data-testid="stTabs"] button[role="tab"] p {
+            font-size: 0.96rem;
+            font-weight: 600;
+        }
+        div[data-testid="stTabs"] [data-baseweb="tab-border"] {
+            display: none;
+        }
+        .chat-shell {
+            background: rgba(255,255,255,0.64);
+            border: 1px solid rgba(15, 23, 42, 0.06);
+            border-radius: 24px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .soft-note {
+            background: rgba(255,255,255,0.82);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 18px;
+            padding: 0.9rem 1rem;
+            color: #4f6070;
+            margin-top: 0.8rem;
         }
         </style>
         """,
@@ -110,26 +131,7 @@ def reset_user_flow() -> None:
         st.session_state.pop(key, None)
 
 
-def render_progress_strip(state: Dict[str, object] | None = None) -> None:
-    active_step = 1
-    if state:
-        if state.get("completed"):
-            active_step = 4
-        elif state.get("needs_survey"):
-            active_step = 3
-        elif state.get("consent_complete"):
-            active_step = 2
-    step_labels = ["1. Sign in", "2. Consent + Chat", "3. Survey", "4. Finish"]
-    html = ['<div class="step-strip">']
-    for index, label in enumerate(step_labels, start=1):
-        css_class = "step-box active" if index == active_step else "step-box"
-        html.append(f'<div class="{css_class}">{label}</div>')
-    html.append("</div>")
-    st.markdown("".join(html), unsafe_allow_html=True)
-
-
 def render_code_gate(service: ExperimentService) -> None:
-    render_progress_strip()
     st.markdown('<div class="panel-card">', unsafe_allow_html=True)
     st.subheader("Participant Access")
     st.write("Please enter your one-time access code to begin or resume your session.")
@@ -150,7 +152,6 @@ def render_code_gate(service: ExperimentService) -> None:
 
 
 def render_consent(service: ExperimentService, code: str, state: Dict[str, object]) -> None:
-    render_progress_strip(state)
     st.markdown('<div class="consent-card">', unsafe_allow_html=True)
     st.subheader("Privacy Notice and Consent")
     st.write("Please review the information below before starting the study chat.")
@@ -185,17 +186,13 @@ def render_consent(service: ExperimentService, code: str, state: Dict[str, objec
 
 
 def render_chat(service: ExperimentService, code: str, state: Dict[str, object]) -> None:
-    render_progress_strip(state)
+    st.markdown('<div class="chat-shell">', unsafe_allow_html=True)
     st.markdown('<div class="panel-card">', unsafe_allow_html=True)
     st.subheader("Experiment Chat")
-    st.markdown(
-        f"""
-        <span class="meta-pill">Condition: {state['assigned_condition']}</span>
-        <span class="meta-pill">Turns used: {state['turn_count']} / {state['max_turns']}</span>
-        <span class="meta-pill">Model: {state['model_name']}</span>
-        """,
-        unsafe_allow_html=True,
-    )
+    if state["unlimited_turns"]:
+        st.caption("There is no fixed turn limit for this session.")
+    else:
+        st.caption(f"Messages used: {state['turn_count']} / {state['max_turns']}")
     for message in state["messages"]:
         with st.chat_message("user"):
             st.write(message["user_text"])
@@ -216,10 +213,10 @@ def render_chat(service: ExperimentService, code: str, state: Dict[str, object])
         else:
             st.error(result["message"])
     st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_survey(service: ExperimentService, code: str, state: Dict[str, object]) -> None:
-    render_progress_strip(state)
     st.markdown('<div class="panel-card">', unsafe_allow_html=True)
     st.subheader("Final Survey")
     st.write("Please answer the final questions below to complete your participation.")
@@ -270,7 +267,6 @@ def render_survey(service: ExperimentService, code: str, state: Dict[str, object
 
 
 def render_completion_page() -> None:
-    render_progress_strip({"completed": True, "consent_complete": True})
     st.markdown(
         """
         <div class="completion-card">
@@ -294,7 +290,19 @@ def render_completion_page() -> None:
 def main() -> None:
     st.set_page_config(page_title="User", page_icon="🧪", layout="wide")
     apply_user_theme()
-    st.title("Participant Mode")
+    st.markdown(
+        """
+        <div class="study-hero">
+            <div class="study-kicker">Participant Session</div>
+            <h1 style="margin:0 0 0.45rem 0;">Participant Mode</h1>
+            <p style="margin:0; color:#536475; font-size:1rem;">
+                Use your one-time access code to enter the study, review the consent notice,
+                complete the chat task, and finish with the final survey.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     try:
         service = get_service()
     except ConfigError as exc:
@@ -330,14 +338,28 @@ def main() -> None:
         reset_user_flow()
         st.rerun()
 
-    if not state["consent_complete"]:
-        render_consent(service, code, state)
-    elif state["needs_survey"]:
+    if state["needs_survey"]:
         render_survey(service, code, state)
     else:
-        render_chat(service, code, state)
-        st.divider()
-        st.info("The survey will appear automatically when you reach the maximum number of chat turns.")
+        consent_tab, chat_tab = st.tabs(["Consent", "Chat"])
+        with consent_tab:
+            render_consent(service, code, state)
+        with chat_tab:
+            if not state["consent_complete"]:
+                st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+                st.subheader("Experiment Chat")
+                st.info("Please complete the consent step first. The chat will unlock immediately after consent.")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                render_chat(service, code, state)
+        st.markdown(
+            '<div class="soft-note">You can return to the Consent tab at any time during this session to review the privacy notice again.</div>',
+            unsafe_allow_html=True,
+        )
+        if state["unlimited_turns"]:
+            st.info("This session has no fixed turn limit. You can continue the chat until you decide to stop the session.")
+        else:
+            st.info("The survey will appear automatically when you reach the maximum number of chat turns.")
 
 
 if __name__ == "__main__":

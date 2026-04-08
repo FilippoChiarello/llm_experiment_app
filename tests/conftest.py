@@ -34,22 +34,28 @@ def prompts_config() -> dict:
             {
                 "id": "c1",
                 "active": True,
+                "provider": "openai",
                 "model": "mock-model-1",
                 "temperature": 0.1,
+                "reasoning_effort": "none",
                 "system_prompt": "Prompt 1",
             },
             {
                 "id": "c2",
                 "active": True,
+                "provider": "openai",
                 "model": "mock-model-2",
                 "temperature": 0.2,
+                "reasoning_effort": "none",
                 "system_prompt": "Prompt 2",
             },
             {
                 "id": "c3",
                 "active": False,
+                "provider": "openai",
                 "model": "mock-model-3",
                 "temperature": 0.3,
+                "reasoning_effort": "none",
                 "system_prompt": "Prompt 3",
             },
         ]

@@ -41,3 +41,15 @@ def test_max_turns_respected(experiment_service, temp_db) -> None:
     blocked = experiment_service.submit_user_message(code, "Turn 3")
     assert blocked["ok"] is False
     assert blocked["reason"] == "survey_required"
+
+
+def test_unlimited_turns_do_not_force_survey(experiment_service, temp_db) -> None:
+    experiment_service.app_config["max_turns"] = 0
+    code = temp_db.create_access_codes(1)[0]
+    started = experiment_service.enter_code(code)
+    experiment_service.record_consent(code)
+    for index in range(5):
+        result = experiment_service.submit_user_message(code, f"Turn {index}")
+        assert result["ok"] is True
+        assert result["data"]["needs_survey"] is False
+    assert started["data"]["session_id"] == temp_db.get_access_code(code)["session_id"]
