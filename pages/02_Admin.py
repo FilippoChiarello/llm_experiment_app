@@ -23,7 +23,7 @@ from services.config_loader import (
 from services.db import Database
 from services.export import create_publication_export, export_all_tables
 from services.model_catalog import get_provider_model_options
-from services.settings import EXPORTS_DIR, get_admin_password, get_database_path
+from services.settings import EXPORTS_DIR, get_admin_password, get_database_path, get_provider_api_key
 
 
 def get_database() -> Database:
@@ -184,8 +184,48 @@ def _format_likert_options(question: Dict[str, Any]) -> str:
     return "\n".join(f"{option['label']}|{option['value']}" for option in question.get("options", []))
 
 
-def render_app_settings() -> None:
+def get_operations_context(database: Database) -> Dict[str, Any]:
+    stats = database.count_access_codes_by_status()
+    metrics = database.get_session_metrics()
+    return {
+        "new_codes": int(stats["new"]),
+        "in_progress_codes": int(stats["in_progress"]),
+        "completed_codes": int(stats["completed"]),
+        "disabled_codes": int(stats["disabled"]),
+        "total_sessions": int(metrics["total_sessions"]),
+        "completed_sessions": int(metrics["completed_sessions"]),
+        "study_live": int(stats["in_progress"]) > 0,
+    }
+
+
+def render_operations_banner(database: Database) -> None:
     app_config = load_app_config()
+    context = get_operations_context(database)
+    provider = app_config.get("llm_provider", "openai")
+    llm_mode = app_config.get("llm_mode", "mock")
+    provider_key_present = bool(get_provider_api_key(provider)) if llm_mode == "openai" else False
+
+    if llm_mode == "mock":
+        st.info("Mock mode is active. Participants will receive simulated responses, which is useful for testing and rehearsal.")
+    else:
+        if provider_key_present:
+            st.success(f"Live mode is active with provider `{provider}`. The required API secret is available on the server.")
+        else:
+            st.error(
+                f"Live mode is selected with provider `{provider}`, but the server secret for that provider is missing. Participant chats may fail until the secret is configured."
+            )
+
+    if app_config["experiment_open"] and not context["study_live"] and context["new_codes"] == 0:
+        st.warning("The experiment is open, but there are no unused participant codes ready to distribute.")
+    if context["study_live"]:
+        st.warning(
+            f"There are currently {context['in_progress_codes']} in-progress participant session(s). Be careful with study settings changes while data collection is underway."
+        )
+
+
+def render_app_settings(database: Database) -> None:
+    app_config = load_app_config()
+    operations = get_operations_context(database)
     st.markdown("### General Settings")
     st.write("Start here when you want to change the overall study behavior, provider defaults, or the participant consent text.")
     with st.form("app_settings_form"):
@@ -218,8 +258,28 @@ def render_app_settings() -> None:
             value=app_config.get("privacy_notice_text", ""),
             height=180,
         )
+        risky_change_requested = any(
+            [
+                title != app_config["title"],
+                experiment_open != app_config["experiment_open"],
+                (0 if unlimited_turns else int(max_turns)) != int(app_config["max_turns"]),
+                llm_mode != app_config.get("llm_mode", "mock"),
+                llm_provider != app_config.get("llm_provider", "openai"),
+                privacy_version.strip() != app_config.get("privacy_version", "v1"),
+                privacy_notice_text.strip() != app_config.get("privacy_notice_text", ""),
+            ]
+        )
+        confirm_risky_change = st.checkbox(
+            "I understand that these changes affect new participants and can change study operations.",
+            value=False,
+            disabled=not (operations["study_live"] and risky_change_requested),
+            help="Required only when there are active in-progress participants and you are changing study-level settings.",
+        )
         submitted = st.form_submit_button("Save settings")
     if submitted:
+        if operations["study_live"] and risky_change_requested and not confirm_risky_change:
+            st.error("Active participant sessions are in progress. Please confirm that you want to change study-level settings during live data collection.")
+            return
         updated = dict(app_config)
         updated["title"] = title
         updated["experiment_open"] = experiment_open
@@ -235,11 +295,14 @@ def render_app_settings() -> None:
         '<div class="admin-soft-note">Recommended workflow: keep the experiment closed while you edit settings, then open it only when participant codes are ready to distribute.</div>',
         unsafe_allow_html=True,
     )
+    if operations["study_live"]:
+        st.warning("Live participants are currently in progress. If possible, wait until active sessions finish before changing global study settings.")
 
 
-def render_conditions_manager() -> None:
+def render_conditions_manager(database: Database) -> None:
     app_config = load_app_config()
     prompts_config = load_prompts_config()
+    operations = get_operations_context(database)
     conditions = prompts_config["conditions"]
     st.markdown("### Experimental Conditions")
     st.write("Manage the experimental arms here without changing application code.")
@@ -336,8 +399,31 @@ def render_conditions_manager() -> None:
             help="Best used with current OpenAI reasoning models such as GPT-5.x variants.",
         )
         system_prompt = st.text_area("System prompt", value=selected_condition["system_prompt"], height=220)
+        risky_condition_change = any(
+            [
+                condition_id.strip() != selected_condition["id"],
+                active != selected_condition["active"],
+                provider != selected_condition.get("provider", app_config.get("llm_provider", "openai")),
+                effective_model != selected_condition["model"],
+                float(temperature) != float(selected_condition.get("temperature", 0.7) or 0.7),
+                float(top_p) != float(selected_condition.get("top_p", 1.0)),
+                (None if use_provider_default_max_output else int(max_output_tokens))
+                != selected_condition.get("max_output_tokens"),
+                reasoning_effort != selected_condition.get("reasoning_effort", "none"),
+                system_prompt != selected_condition["system_prompt"],
+            ]
+        )
+        confirm_condition_change = st.checkbox(
+            "I understand that condition changes will affect future participant assignments.",
+            value=False,
+            disabled=not (operations["study_live"] and risky_condition_change),
+            help="Required only when there are active participants and you are changing a condition.",
+        )
         submitted = st.form_submit_button("Save condition")
     if submitted:
+        if operations["study_live"] and risky_condition_change and not confirm_condition_change:
+            st.error("Active participant sessions are in progress. Please confirm the condition change before saving.")
+            return
         if condition_id != selected_condition["id"] and any(
             condition["id"] == condition_id for condition in conditions
         ):
@@ -404,8 +490,16 @@ def render_conditions_manager() -> None:
                 key="new_condition_reasoning_effort",
             )
             new_system_prompt = st.text_area("New condition system prompt", height=180)
+            confirm_add_condition = st.checkbox(
+                "I understand that a new condition changes future random assignment.",
+                value=False,
+                disabled=not operations["study_live"],
+            )
             add_submitted = st.form_submit_button("Add condition")
         if add_submitted:
+            if operations["study_live"] and not confirm_add_condition:
+                st.error("Active participant sessions are in progress. Please confirm that you want to add a new condition during live data collection.")
+                return
             if not new_id.strip():
                 st.error("Please enter an ID for the new condition.")
                 return
@@ -435,6 +529,9 @@ def render_conditions_manager() -> None:
         if len(conditions) == 1:
             st.info("You cannot remove the last available condition.")
         elif st.button("Remove selected condition"):
+            if operations["study_live"]:
+                st.error("Removing a condition is blocked while participant sessions are in progress. Wait until the live study is clear, then try again.")
+                return
             updated_conditions = [condition for condition in conditions if condition["id"] != selected_condition_id]
             save_prompts_config({"conditions": updated_conditions})
             st.success("Condition removed.")
@@ -656,9 +753,12 @@ def render_yaml_editor(title: str, path: Path, save_fn) -> None:
         st.rerun()
 
 
-def render_study_readiness(app_config: Dict[str, Any], prompts_config: Dict[str, Any], survey_config: Dict[str, Any]) -> None:
+def render_study_readiness(app_config: Dict[str, Any], prompts_config: Dict[str, Any], survey_config: Dict[str, Any], database: Database) -> None:
     conditions = prompts_config["conditions"]
     active_conditions = [condition for condition in conditions if condition["active"]]
+    operations = get_operations_context(database)
+    provider = app_config.get("llm_provider", "openai")
+    provider_key_present = bool(get_provider_api_key(provider)) if app_config.get("llm_mode", "mock") == "openai" else True
     checks = [
         (
             "Participant entry",
@@ -680,6 +780,16 @@ def render_study_readiness(app_config: Dict[str, Any], prompts_config: Dict[str,
             str(app_config.get("llm_mode", "mock")).upper(),
             "Participants will use mock responses." if app_config.get("llm_mode", "mock") == "mock" else "Live model calls are enabled.",
         ),
+        (
+            "Provider secret",
+            "Available" if provider_key_present else "Missing",
+            "The live provider secret is present on the server." if provider_key_present else "The selected live provider does not currently have a usable server secret configured.",
+        ),
+        (
+            "Live activity",
+            f"{operations['in_progress_codes']} in progress",
+            "The study is currently collecting live participant data." if operations["study_live"] else "There are no active participant sessions right now.",
+        ),
     ]
     st.markdown("### Study Readiness")
     for title, status, detail in checks:
@@ -691,6 +801,7 @@ def render_study_readiness(app_config: Dict[str, Any], prompts_config: Dict[str,
 
 def render_overview(database: Database) -> None:
     app_config, prompts_config, survey_config = _load_configs()
+    render_operations_banner(database)
     pills = [
         f"Experiment {'open' if app_config['experiment_open'] else 'closed'}",
         f"LLM mode: {app_config.get('llm_mode', 'mock')}",
@@ -705,7 +816,7 @@ def render_overview(database: Database) -> None:
     with overview_col:
         render_dashboard(database)
     with checklist_col:
-        render_study_readiness(app_config, prompts_config, survey_config)
+        render_study_readiness(app_config, prompts_config, survey_config, database)
 
 
 def render_dashboard(database: Database) -> None:
@@ -835,6 +946,9 @@ def render_dashboard(database: Database) -> None:
 
 def render_codes(database: Database) -> None:
     st.markdown("### Generate One-Time Codes")
+    operations = get_operations_context(database)
+    if operations["study_live"]:
+        st.info("A live study session is currently running. Generate new codes only if you want to onboard more participants right now.")
     with st.form("generate_codes_form"):
         how_many = st.number_input("Number of codes to generate", min_value=1, max_value=500, value=5)
         submitted = st.form_submit_button("Generate")
@@ -955,6 +1069,7 @@ def main() -> None:
     with top_tab_overview:
         render_overview(database)
     with top_tab_setup:
+        render_operations_banner(database)
         st.markdown(
             '<div class="admin-soft-note">Use this area to configure the study before you distribute participant codes. The usual order is General Settings, then Conditions, then Survey.</div>',
             unsafe_allow_html=True,
@@ -963,18 +1078,20 @@ def main() -> None:
             ["General Settings", "Conditions", "Survey"]
         )
         with setup_tab_general:
-            render_app_settings()
+            render_app_settings(database)
         with setup_tab_conditions:
-            render_conditions_manager()
+            render_conditions_manager(database)
         with setup_tab_survey:
             render_survey_manager()
     with top_tab_participants:
+        render_operations_banner(database)
         st.markdown(
             '<div class="admin-soft-note">Use this area during live data collection to generate codes, check recent participant progress, and monitor operational status.</div>',
             unsafe_allow_html=True,
         )
         render_codes(database)
     with top_tab_export:
+        render_operations_banner(database)
         render_export(database)
 
 
